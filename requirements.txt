@@ -1,6 +1,10 @@
-tensorflow 
-pandas 
-numpy 
-matplotlib 
-seaborn 
+# Full development environment: notebooks, training and exporting the model bundle.
+# The deployed app needs far less — see space/requirements.txt (streamlit + numpy only).
+tensorflow
+pandas
+numpy
+matplotlib
+seaborn
 scikit-learn
+joblib
+streamlit
