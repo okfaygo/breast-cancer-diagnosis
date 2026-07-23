@@ -22,15 +22,16 @@ from pathlib import Path
 SPACE_DIR = Path("space")
 RUNTIME_FILES = ["app.py", "inference.py", "model_bundle.npz"]
 
-# sdk_version is deliberately omitted so Hugging Face uses its current default
-# Streamlit — pinning a version it doesn't offer is a common first-deploy failure.
+# Hugging Face's API no longer accepts "streamlit" as a Space SDK (only gradio,
+# docker or static), so the Streamlit app runs inside a Docker Space. app_port tells
+# HF which port the container serves on.
 README = """---
 title: Breast Cancer Diagnosis
 emoji: 🔬
 colorFrom: blue
 colorTo: purple
-sdk: streamlit
-app_file: app.py
+sdk: docker
+app_port: 8501
 pinned: false
 ---
 
@@ -62,6 +63,25 @@ Full training pipeline and analysis:
 
 REQUIREMENTS = "streamlit\nnumpy\n"
 
+# Runs as a non-root user (HF Spaces convention) with a writable HOME so Streamlit
+# can create its config/cache. Binds 0.0.0.0:8501 to match app_port in the README.
+DOCKERFILE = """FROM python:3.11-slim
+
+RUN useradd -m -u 1000 user
+USER user
+ENV HOME=/home/user \\
+    PATH=/home/user/.local/bin:$PATH \\
+    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+WORKDIR /home/user/app
+
+COPY --chown=user requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY --chown=user . .
+
+EXPOSE 8501
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+"""
+
 
 def build() -> None:
     SPACE_DIR.mkdir(exist_ok=True)
@@ -72,9 +92,10 @@ def build() -> None:
         shutil.copy2(source, SPACE_DIR / name)
     (SPACE_DIR / "README.md").write_text(README, encoding="utf-8")
     (SPACE_DIR / "requirements.txt").write_text(REQUIREMENTS, encoding="utf-8")
+    (SPACE_DIR / "Dockerfile").write_text(DOCKERFILE, encoding="utf-8")
 
     total_kb = sum((SPACE_DIR / f).stat().st_size for f in RUNTIME_FILES) / 1024
-    print(f"built {SPACE_DIR}/ — {len(RUNTIME_FILES) + 2} files, {total_kb:.1f} KB of runtime assets")
+    print(f"built {SPACE_DIR}/ — {len(RUNTIME_FILES) + 3} files, {total_kb:.1f} KB of runtime assets")
     for path in sorted(SPACE_DIR.iterdir()):
         print(f"  {path.name}")
 
@@ -85,10 +106,11 @@ def upload(repo_id: str, private: bool) -> None:
     if not get_token():
         raise SystemExit("not logged in — run `hf auth login` first")
 
-    create_repo(repo_id, repo_type="space", space_sdk="streamlit",
+    create_repo(repo_id, repo_type="space", space_sdk="docker",
                 private=private, exist_ok=True)
     upload_folder(folder_path=str(SPACE_DIR), repo_id=repo_id, repo_type="space",
-                  commit_message="Deploy breast cancer diagnosis app")
+                  commit_message="Deploy breast cancer diagnosis app",
+                  ignore_patterns=["__pycache__/*", "*.pyc"])
     print(f"\ndeployed → https://huggingface.co/spaces/{repo_id}")
 
 
