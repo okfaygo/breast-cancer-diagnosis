@@ -3,8 +3,8 @@ title: Breast Cancer Diagnosis
 emoji: 🔬
 colorFrom: blue
 colorTo: purple
-sdk: streamlit
-app_file: app.py
+sdk: docker
+app_port: 8501
 pinned: false
 ---
 
