@@ -1,10 +1,10 @@
 """
 Build (and optionally upload) the Hugging Face Space for this project.
 
-The Space needs only three runtime files — app.py, inference.py and
-model_bundle.npz — plus its own README.md (with HF metadata) and a minimal
-requirements.txt. This script assembles them into ./space/ so there is a single
-source of truth at the repo root and the copies can't drift.
+The Space needs the app's runtime files (app.py, the views/ pages, the shared
+loaders and the two .npz data files) plus its own Dockerfile, README.md (with HF
+metadata) and a minimal requirements.txt. This script assembles them into ./space/
+so there is a single source of truth at the repo root and the copies can't drift.
 
 Build only:
     python deploy_hf.py
@@ -20,7 +20,8 @@ import shutil
 from pathlib import Path
 
 SPACE_DIR = Path("space")
-RUNTIME_FILES = ["app.py", "inference.py", "model_bundle.npz"]
+RUNTIME_FILES = ["app.py", "appdata.py", "inference.py", "model_bundle.npz", "about_data.npz"]
+RUNTIME_DIRS = ["views"]  # copied recursively, minus Python caches
 
 # Hugging Face's API no longer accepts "streamlit" as a Space SDK (only gradio,
 # docker or static), so the Streamlit app runs inside a Docker Space. app_port tells
@@ -46,12 +47,15 @@ benign, trained on the Wisconsin Diagnostic Breast Cancer dataset (569 samples,
 
 ## About
 
+Two pages: an interactive **Predict** page, and an **About the model** page with the
+ROC curve, confusion matrix, cross-validation breakdown and feature importance.
+
 - **Model:** feedforward network (30 - 64 - 32 - 1) with dropout, trained in Keras.
-- **Cross-validated performance:** recall 0.96 (± 0.04), AUC 0.994 over 5 stratified
+- **Cross-validated performance:** recall 0.96 (± 0.03), AUC 0.994 over 5 stratified
   folds — not the flattering single-split score.
 - **Decision threshold:** defaults to 0.35 rather than 0.5, tuned to favour recall,
   because a missed cancer is costlier than a false alarm. The threshold is adjustable.
-- **Inference:** runs in pure NumPy from a 20 KB weight bundle, so the Space starts
+- **Inference:** runs in pure NumPy from a ~20 KB weight bundle, so the Space starts
   in under a second without TensorFlow.
 
 Try the example cases — including "the hard case", a small but genuinely malignant
@@ -88,16 +92,26 @@ def build() -> None:
     for name in RUNTIME_FILES:
         source = Path(name)
         if not source.exists():
-            raise SystemExit(f"missing {name} — run `python export_bundle.py` first")
+            raise SystemExit(
+                f"missing {name} — run `python export_bundle.py` and "
+                f"`python compute_about_data.py` first"
+            )
         shutil.copy2(source, SPACE_DIR / name)
+    for name in RUNTIME_DIRS:
+        source = Path(name)
+        if not source.exists():
+            raise SystemExit(f"missing {name}/ directory")
+        shutil.copytree(source, SPACE_DIR / name,
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+                        dirs_exist_ok=True)
     (SPACE_DIR / "README.md").write_text(README, encoding="utf-8")
     (SPACE_DIR / "requirements.txt").write_text(REQUIREMENTS, encoding="utf-8")
     (SPACE_DIR / "Dockerfile").write_text(DOCKERFILE, encoding="utf-8")
 
-    total_kb = sum((SPACE_DIR / f).stat().st_size for f in RUNTIME_FILES) / 1024
-    print(f"built {SPACE_DIR}/ — {len(RUNTIME_FILES) + 3} files, {total_kb:.1f} KB of runtime assets")
-    for path in sorted(SPACE_DIR.iterdir()):
-        print(f"  {path.name}")
+    print(f"built {SPACE_DIR}/")
+    for path in sorted(SPACE_DIR.rglob("*")):
+        if "__pycache__" not in path.parts and path.is_file():
+            print(f"  {path.relative_to(SPACE_DIR)}  ({path.stat().st_size / 1024:.1f} KB)")
 
 
 def upload(repo_id: str, private: bool) -> None:
