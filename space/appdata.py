@@ -4,6 +4,7 @@ import numpy as np
 import streamlit as st
 
 from inference import load_bundle
+from tree_inference import load_trees
 
 # Threshold tuned in Stage 8 of the notebook: favours recall (catching cancer)
 # over precision, which is the right trade-off for a screening context.
@@ -23,3 +24,9 @@ def get_about_data(path: str = "about_data.npz"):
     """Precomputed performance data for the About page (see compute_about_data.py)."""
     with np.load(path, allow_pickle=False) as data:
         return {key: data[key] for key in data.files}
+
+
+@st.cache_resource(show_spinner="Loading comparison models…")
+def get_trees():
+    """Random forest + gradient boosting trees for the model-agreement panel."""
+    return load_trees()
