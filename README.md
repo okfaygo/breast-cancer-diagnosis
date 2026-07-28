@@ -83,9 +83,11 @@ Both notebooks follow the same structure; the WDBC notebook extends it with two 
 ## The web app
 
 A [Streamlit](https://streamlit.io) app ([`app.py`](app.py)) serves the WDBC model interactively, with
-two pages:
+three pages:
 
-- **Predict** — enter tumor measurements (or load an example) and get a malignancy probability.
+- **Predict** — enter tumor measurements (or load an example) and get a malignancy probability, plus a
+  live **model-agreement panel** comparing the neural net, random forest and gradient boosting.
+- **Batch scoring** — upload a CSV of tumors, score them all at once, and download the results.
 - **About the model** — the ROC curve, confusion matrix, cross-validation breakdown and feature
   importance, so a visitor can judge how good the model actually is.
 
@@ -96,6 +98,8 @@ two pages:
 - **30 features is an unusable form.** The Predict page shows the six highest-importance features as
   sliders, defaults the other 24 to the dataset median behind an expander, and offers one-click example
   cases loaded from real dataset rows — including *the hard case* that the tree models misclassify.
+- **The model-agreement panel makes uncertainty honest.** On borderline tumors the three model families
+  disagree; showing all three side by side communicates that far better than a single number.
 - **Sliders are bounded** by each feature's real min/max, so physically impossible tumors can't be entered.
 - **The decision threshold is exposed, not hidden.** It defaults to the recall-favouring 0.35 from
   Stage 8, with the trade-off explained in the UI.
@@ -107,14 +111,18 @@ two pages:
 The trained network is a small MLP (30 → 64 → 32 → 1, ~4,100 parameters), so a forward pass is three
 matrix multiplies. [`export_bundle.py`](export_bundle.py) exports the weights, the scaler parameters,
 the feature ranges and the example rows into a **~20 KB** `model_bundle.npz`, and
-[`inference.py`](inference.py) runs the forward pass in pure NumPy. Separately,
-[`compute_about_data.py`](compute_about_data.py) precomputes the About page's metrics (ROC points,
-confusion matrices, cross-validation results, permutation importance) into a small `about_data.npz`, so
-the charts render with no heavy libraries either.
+[`inference.py`](inference.py) runs the forward pass in pure NumPy.
 
-The deployed app therefore needs only `streamlit` and `numpy` — no TensorFlow, scikit-learn or joblib —
-so it cold-starts in under a second instead of tens of seconds. The exporter verifies the NumPy output
-matches Keras across all 569 samples (max difference ~6e-08) and refuses to write a mismatched bundle.
+The comparison models get the same treatment: [`export_trees.py`](export_trees.py) serialises the random
+forest and gradient boosting trees into `trees_bundle.npz` (~86 KB), and [`tree_inference.py`](tree_inference.py)
+walks them in NumPy. And [`compute_about_data.py`](compute_about_data.py) precomputes the About page's
+metrics (ROC points, confusion matrices, cross-validation results, permutation importance) into a small
+`about_data.npz`, so the charts render with no heavy libraries either.
+
+The deployed app therefore needs only `streamlit`, `numpy` and `pandas` — no TensorFlow, scikit-learn or
+joblib — so it cold-starts in under a second instead of tens of seconds. Both exporters verify their NumPy
+output matches the original library across all 569 samples (neural net max difference ~6e-08; the tree
+models match scikit-learn exactly) and refuse to write a mismatched bundle.
 
 ---
 
@@ -128,14 +136,18 @@ breast-cancer-diagnosis/
 │   └── breast_cancer_enhanced_dataset.csv  # Data for notebook 1 (WDBC loads from scikit-learn)
 ├── app.py                                # Streamlit web app — entry point (navigation + disclaimer)
 ├── views/
-│   ├── predict.py                        # Predict page
+│   ├── predict.py                        # Predict page (+ model-agreement panel)
+│   ├── batch.py                          # Batch CSV scoring page
 │   └── about.py                          # About-the-model page (charts)
 ├── appdata.py                            # Shared cached loaders for the pages
-├── inference.py                          # Dependency-free NumPy forward pass
+├── inference.py                          # Dependency-free NumPy forward pass (neural net)
+├── tree_inference.py                     # Dependency-free NumPy inference (random forest + GB)
 ├── export_bundle.py                      # Keras model + scaler -> model_bundle.npz (with parity check)
+├── export_trees.py                       # RF + GB -> trees_bundle.npz (with parity check)
 ├── compute_about_data.py                 # Precomputes About-page metrics -> about_data.npz
 ├── deploy_hf.py                          # Builds (and uploads) the Hugging Face Space
 ├── model_bundle.npz                      # ~20 KB weights + scaler + feature ranges + examples
+├── trees_bundle.npz                      # ~86 KB serialised RF + GB trees
 ├── about_data.npz                        # Precomputed ROC / confusion / CV / importance data
 ├── space/                                # Deployable Hugging Face Space (generated by deploy_hf.py)
 ├── breast_cancer_model.keras             # Saved model — enhanced
@@ -176,10 +188,11 @@ Run the cells top to bottom. Each notebook saves its trained model (`*.keras`) a
 python -m streamlit run app.py
 ```
 
-It opens at `http://localhost:8501`. If you retrain the model, regenerate both data artifacts first:
+It opens at `http://localhost:8501`. If you retrain, regenerate all three data artifacts first:
 
 ```bash
 python export_bundle.py
+python export_trees.py
 python compute_about_data.py
 ```
 
@@ -214,21 +227,20 @@ training is noisy and the error-analysis narrative would drift from run to run.
 - Python 3.9+
 - **Development** (notebooks, training, exporting): TensorFlow, pandas, NumPy, matplotlib, seaborn,
   scikit-learn, joblib, Streamlit — see [`requirements.txt`](requirements.txt)
-- **Deployed app**: `streamlit` and `numpy` only — see [`space/requirements.txt`](space/requirements.txt)
+- **Deployed app**: `streamlit`, `numpy` and `pandas` only — see [`space/requirements.txt`](space/requirements.txt)
 
 ---
 
 ## Roadmap / next steps
 
-- **Batch CSV upload** — score many tumors at once and download the results
-- **Model-agreement panel** — show the neural net, random forest and gradient boosting predictions
-  side by side, which is far more honest about uncertainty on borderline cases
 - **Hyperparameter tuning** (e.g. `keras_tuner`), evaluated with the Stage 9 CV loop rather than a single split
 - **Explainability** with SHAP (`shap.DeepExplainer`) to explain individual predictions
 - **Probability calibration** before trusting any threshold more seriously
 
 Done so far: two-notebook pipeline with error analysis, ensembling and cross-validation; a NumPy-served
-Streamlit app deployed to Hugging Face Spaces; and a two-page UI with an About-the-model page.
+Streamlit app (neural net, random forest and gradient boosting all reimplemented in NumPy) deployed to
+Hugging Face Spaces; and a three-page UI — Predict with a model-agreement panel, Batch scoring, and an
+About-the-model page.
 
 ---
 

@@ -19,8 +19,10 @@ benign, trained on the Wisconsin Diagnostic Breast Cancer dataset (569 samples,
 
 ## About
 
-Two pages: an interactive **Predict** page, and an **About the model** page with the
-ROC curve, confusion matrix, cross-validation breakdown and feature importance.
+Three pages: an interactive **Predict** page (with a live model-agreement panel
+comparing the neural net, random forest and gradient boosting), a **Batch scoring**
+page for CSV upload, and an **About the model** page with the ROC curve, confusion
+matrix, cross-validation breakdown and feature importance.
 
 - **Model:** feedforward network (30 - 64 - 32 - 1) with dropout, trained in Keras.
 - **Cross-validated performance:** recall 0.96 (± 0.03), AUC 0.994 over 5 stratified

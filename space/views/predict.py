@@ -3,8 +3,9 @@
 import numpy as np
 import streamlit as st
 
-from appdata import DEFAULT_THRESHOLD, get_bundle
+from appdata import DEFAULT_THRESHOLD, get_bundle, get_trees
 from inference import predict_proba
+from tree_inference import gb_predict_proba, rf_predict_proba
 
 # The features that dominated permutation importance. Everything else is still
 # used by the model, but defaults to the dataset median so the form stays usable.
@@ -122,3 +123,57 @@ with right:
     metric_cols[1].metric("AUC", "0.994")
     metric_cols[2].metric("Training data", "569")
     st.caption("See the **About the model** page for the full breakdown.")
+
+st.divider()
+st.markdown("#### Model agreement")
+st.caption(
+    "The neural net is the deployed model. A random forest and gradient boosting were "
+    "trained on the same data for comparison. When they disagree, the case is genuinely "
+    "borderline — try **The hard case** example to see it."
+)
+
+trees = get_trees()
+rf_prob = float(rf_predict_proba(sample, trees)[0])
+gb_prob = float(gb_predict_proba(sample, trees)[0])
+agreement = [
+    {"model": "Neural net (served)", "prob": round(probability, 3)},
+    {"model": "Random forest", "prob": round(rf_prob, 3)},
+    {"model": "Gradient boosting", "prob": round(gb_prob, 3)},
+]
+
+st.vega_lite_chart(
+    {
+        "height": 150,
+        "layer": [
+            {
+                "data": {"values": agreement},
+                "mark": {"type": "bar", "color": "#7f77dd"},
+                "encoding": {
+                    "y": {"field": "model", "type": "nominal", "sort": None, "title": None},
+                    "x": {"field": "prob", "type": "quantitative",
+                          "scale": {"domain": [0, 1]}, "title": "P(malignant)"},
+                },
+            },
+            {
+                "data": {"values": [{"threshold": threshold}]},
+                "mark": {"type": "rule", "color": "#e24b4a", "strokeDash": [5, 4], "size": 2},
+                "encoding": {"x": {"field": "threshold", "type": "quantitative"}},
+            },
+        ],
+    },
+    use_container_width=True,
+)
+
+verdicts = {name: (p >= threshold) for name, p in
+            [("neural net", probability), ("random forest", rf_prob), ("gradient boosting", gb_prob)]}
+if len(set(verdicts.values())) > 1:
+    malignant = [n for n, v in verdicts.items() if v]
+    benign = [n for n, v in verdicts.items() if not v]
+    st.info(
+        f"The models **disagree** at the {threshold:.2f} threshold — "
+        f"{', '.join(malignant)} say malignant while {', '.join(benign)} say benign. "
+        "That is the signature of a borderline tumor.",
+        icon="⚖️",
+    )
+else:
+    st.caption(f"All three models agree at the {threshold:.2f} threshold (dashed red line).")

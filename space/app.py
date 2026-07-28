@@ -26,13 +26,14 @@ st.caption(
 )
 st.warning(
     "**Educational demo only — not a medical device and not for clinical use.** "
-    "This model was trained on a small public research dataset to practise machine "
+    "This model was trained on a small public research dataset to practice machine "
     "learning. It must never be used to make real medical decisions.",
     icon="⚠️",
 )
 
 pages = [
     st.Page("views/predict.py", title="Predict", icon="🩺", default=True),
+    st.Page("views/batch.py", title="Batch scoring", icon="📄"),
     st.Page("views/about.py", title="About the model", icon="📊"),
 ]
 st.navigation(pages).run()

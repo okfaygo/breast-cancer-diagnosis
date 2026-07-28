@@ -20,7 +20,12 @@ import shutil
 from pathlib import Path
 
 SPACE_DIR = Path("space")
-RUNTIME_FILES = ["app.py", "appdata.py", "inference.py", "model_bundle.npz", "about_data.npz"]
+RUNTIME_FILES = [
+    "app.py", "appdata.py",
+    "inference.py", "model_bundle.npz",         # neural net
+    "tree_inference.py", "trees_bundle.npz",    # random forest + gradient boosting
+    "about_data.npz",                           # About-page metrics
+]
 RUNTIME_DIRS = ["views"]  # copied recursively, minus Python caches
 
 # Hugging Face's API no longer accepts "streamlit" as a Space SDK (only gradio,
@@ -47,8 +52,10 @@ benign, trained on the Wisconsin Diagnostic Breast Cancer dataset (569 samples,
 
 ## About
 
-Two pages: an interactive **Predict** page, and an **About the model** page with the
-ROC curve, confusion matrix, cross-validation breakdown and feature importance.
+Three pages: an interactive **Predict** page (with a live model-agreement panel
+comparing the neural net, random forest and gradient boosting), a **Batch scoring**
+page for CSV upload, and an **About the model** page with the ROC curve, confusion
+matrix, cross-validation breakdown and feature importance.
 
 - **Model:** feedforward network (30 - 64 - 32 - 1) with dropout, trained in Keras.
 - **Cross-validated performance:** recall 0.96 (± 0.03), AUC 0.994 over 5 stratified
@@ -65,7 +72,7 @@ Full training pipeline and analysis:
 [github.com/okfaygo/breast-cancer-diagnosis](https://github.com/okfaygo/breast-cancer-diagnosis)
 """
 
-REQUIREMENTS = "streamlit\nnumpy\n"
+REQUIREMENTS = "streamlit\nnumpy\npandas\n"
 
 # Runs as a non-root user (HF Spaces convention) with a writable HOME so Streamlit
 # can create its config/cache. Binds 0.0.0.0:8501 to match app_port in the README.
@@ -93,8 +100,8 @@ def build() -> None:
         source = Path(name)
         if not source.exists():
             raise SystemExit(
-                f"missing {name} — run `python export_bundle.py` and "
-                f"`python compute_about_data.py` first"
+                f"missing {name} — run export_bundle.py, export_trees.py and "
+                f"compute_about_data.py first"
             )
         shutil.copy2(source, SPACE_DIR / name)
     for name in RUNTIME_DIRS:
