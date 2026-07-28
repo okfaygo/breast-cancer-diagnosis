@@ -26,7 +26,7 @@ RUNTIME_FILES = [
     "tree_inference.py", "trees_bundle.npz",    # random forest + gradient boosting
     "about_data.npz",                           # About-page metrics
 ]
-RUNTIME_DIRS = ["views"]  # copied recursively, minus Python caches
+RUNTIME_DIRS = ["views", ".streamlit"]  # copied recursively, minus Python caches
 
 # Hugging Face's API no longer accepts "streamlit" as a Space SDK (only gradio,
 # docker or static), so the Streamlit app runs inside a Docker Space. app_port tells
@@ -72,7 +72,9 @@ Full training pipeline and analysis:
 [github.com/okfaygo/breast-cancer-diagnosis](https://github.com/okfaygo/breast-cancer-diagnosis)
 """
 
-REQUIREMENTS = "streamlit\nnumpy\npandas\n"
+# Pinned to the versions the app was tested against, so a newer Streamlit can't
+# silently remove a deprecated API (e.g. use_container_width) and break the deploy.
+REQUIREMENTS = "streamlit==1.59.2\nnumpy==2.2.6\npandas==2.3.3\n"
 
 # Runs as a non-root user (HF Spaces convention) with a writable HOME so Streamlit
 # can create its config/cache. Binds 0.0.0.0:8501 to match app_port in the README.

@@ -1,0 +1,10 @@
+# The file uploader posts to /_stcore/upload_file, which Streamlit's XSRF/CORS
+# protection rejects with HTTP 403 when the app runs behind a proxy or in an iframe
+# (e.g. Hugging Face Spaces). Relaxing these is the standard fix, and safe here: the
+# app is a stateless, unauthenticated, read-only demo with no server-side mutations.
+[server]
+enableXsrfProtection = false
+enableCORS = false
+
+[browser]
+gatherUsageStats = false
